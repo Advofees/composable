@@ -16,7 +16,7 @@ class AccessPolicy < MongoidApplicationRecord
     field :resources, type: Array
 
     # Conditions for this policy
-    field :conditions, type: Array
+    # field :conditions, type: Array
 
     validates :name, presence: true, uniqueness: true
     validates :description, presence: true
@@ -25,18 +25,18 @@ class AccessPolicy < MongoidApplicationRecord
     validate :check_actions
     validate :check_principals
     validate :check_resources
-    validate :check_conditions
+    # validate :check_conditions
 
-    def check_conditions
+    # def check_conditions
 
-    end
+    # end
 
     def check_actions
         unless check_emptiness("actions", actions)
             return
         end
 
-        action_pattern = /krn:action:.*:.*\z/
+        action_pattern = /krn:action:.+:.+\z/
 
         actions.each do |action|
             unless validate_scheme("actions", action, action_pattern)
@@ -54,7 +54,7 @@ class AccessPolicy < MongoidApplicationRecord
             return
         end
 
-        principal_pattern = /\A(krn:(role|group|iam|client)):.*:.*\z/
+        principal_pattern = /\A(krn:(role|group|user|client)):.+:.+\z/
 
         principals.each do |principal|
             
@@ -73,7 +73,7 @@ class AccessPolicy < MongoidApplicationRecord
             return
         end
 
-        resource_pattern = /krn:.*:.*:.*\z/
+        resource_pattern = /krn:.+:.+:.+\z/
 
         resources.each do |resource|
             unless validate_scheme("resources", resource, resource_pattern)
@@ -86,12 +86,9 @@ class AccessPolicy < MongoidApplicationRecord
         end
     end
 
-    def validate_scheme(fld, scheme, pattern)
-
-        # gsub(/\*/, "\\\\\\*")
-        
-        unless scheme.match(pattern)
-            errors.add(fld.to_sym, "#{fld.capitalize} is an invalid KRN")
+    def validate_scheme(fld, scheme, pattern) 
+        unless scheme.count(":") == 3 and scheme.match(pattern)
+            errors.add(fld.to_sym, "'#{scheme}' is an invalid KRN for #{fld}")
             return false
         end
 
@@ -124,26 +121,67 @@ class AccessPolicy < MongoidApplicationRecord
 
         exists = false
 
-        if resource_type == "role"
-            exists = Role.exists?(id: resource_id) || Role.exists?(name: resource_id)
-            puts "exists: #{Role.exists?(name: resource_id)}"
-        elsif resource_type = "case"
-            exists = Case.exists?(id: resource_id)
-        elsif resource_type == "client"
-            exists = Client.exists?(id: resource_id)
-        elsif resource_type == "group"
-            exists = Group.exists?(id: resource_id)
-        elsif resource_type == "action"
-            exists = ResourceAction.exists?(id: resource_id) || ResourceAction.exists?(name: resource_id)
-        elsif resource_type == "iam"
-            exists = User.exists?(id: resource_id) || User.exists?(username: resource_id)
-        elsif ["*", ""].include?(resource_type)
-        else
-            errors.add(flds.to_sym, "Invalid resource type")
-        end
+        resource_class = nil
 
-        unless exists
-            errors.add(flds.to_sym, "#{krn} does not exist")
+        if resource_type == "*"
+            # All resources
+            return true
+        elsif ["role", "group", "user", "client", "case", "action", "access_policy"].include?(resource_type)
+            
+            begin
+                resource_class = Strings.snake_to_camel(resource_type).constantize
+                
+                if resource_field == "*" # All resources
+                    return true
+                end
+
+                if resource_class.ancestors.include?(ApplicationRecord)
+                    database_fields = resource_class.columns.map(&:name) # Extract attributes for resource
+
+                    # Check resource attributes
+                    unless database_fields.include?(resource_field)
+                        errors.add(flds.to_sym, "Unknown attribute #{resource_field} for #{resource_class.to_s}")
+                        return false
+                    end
+
+                    # Validate uuid
+                    if resource_field == "id"
+                        unless "#{resource_field_value}".match?(/[a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12}\z/)
+                            errors.add(flds.to_sym, "'#{resource_field_value}' is not a valid uuid for the #{resource_field} field")
+                            return false
+                        end
+                    end
+
+                    # Check if record exists
+                    unless resource_class.exists?(["#{resource_field} = ?", resource_field_value])
+                        errors.add(flds.to_sym, "#{resource_class.to_s} by #{resource_field} '#{resource_field_value}' does not exist")
+                        return false
+                    end
+                    exists = true
+                elsif resource_class.ancestors.include?(MongoidApplicationRecord)
+                    database_fields = resource_class.fields.keys # Extract attributes for resource
+
+                    # Check resource attributes
+                    unless database_fields.include?(resource_field)
+                        errors.add(flds.to_sym, "Unknown attribute #{resource_field} for #{resource_class.to_s}")
+                        return false
+                    end
+
+                    # Check if record exists
+                    unless resource_class.exists?("#{resource_field}" => { "$eq" => resource_field_value })
+                        errors.add(flds.to_sym, "#{resource_class.to_s} by #{resource_field} '#{resource_field_value}' does not exist")
+                        return false
+                    end
+                    exists = true
+                else
+                    # Not a database resource
+                end
+            rescue => exception
+                errors.add(flds.to_sym, "Unknown resource '#{resource_type}'")
+                return false
+            end
+        else
+            errors.add(flds.to_sym, "Invalid resource type, '#{resource_type}'")
             return false
         end
         exists

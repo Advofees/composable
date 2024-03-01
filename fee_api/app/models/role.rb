@@ -9,7 +9,7 @@ class Role < ApplicationRecord
     before_save :uppercase_name
 
     def self.to_krn(role_name)
-        "krn:role:#{role_name}"
+        "krn:role:name:#{role_name}"
     end
 
     private

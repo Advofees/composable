@@ -291,8 +291,8 @@ class CasesController < ApplicationController
   end
 
   def destroy
-    @casex.destroy
     authorize @casex, :destroy?
+    @casex.destroy
     head :no_content
   end
 

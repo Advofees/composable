@@ -51,7 +51,7 @@ class ApplicationPolicy
     # Immediately deny access if no policy is attached
     return false if (policies.nil? || policies.empty?)
 
-    current_principals = [@user.authorities.map { |a| a.starts_with?("ROLE") ? Role.to_krn(a) : Group.to_krn(a)  } , "krn:#{@user.grant == "user" ? "iam" : "client"}:#{@user.principal["id"]}", "krn:#{@user.grant == "user" ? "iam" : "client"}:#{@user.principal["username"]}"].flatten
+    current_principals = [@user.authorities.map { |a| a.starts_with?("ROLE") ? Role.to_krn(a) : Group.to_krn(a)  } , "krn:#{@user.grant == "user" ? "user" : "client"}:#{@user.principal["id"]}", "krn:#{@user.grant}:#{@user.principal["username"]}"].flatten
     
     # Evaluate each policy
     policies.each do |policy|

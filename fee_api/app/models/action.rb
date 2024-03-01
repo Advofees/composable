@@ -1,4 +1,4 @@
-class ResourceAction < ApplicationRecord
+class Action < ApplicationRecord
     validates :name, uniqueness: true, presence: true
 
     validate :check_spaces

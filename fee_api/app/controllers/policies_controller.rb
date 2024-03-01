@@ -14,15 +14,15 @@ class PoliciesController < ApplicationController
     end
 
     def index_of_resource_actions
-        render json: ResourceAction.all
+        render json: Action.all
     end
 
     def show_resource_action
-        render json: ResourceAction.find(params[:id])
+        render json: Action.find(params[:id])
     end
 
     def create_resource_action
-        render json: ResourceAction.create!(resource_action_params)
+        render json: Action.create!(resource_action_params)
     end
 
     private
